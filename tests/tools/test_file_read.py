@@ -93,3 +93,13 @@ class TestFileReadTool:
         tool = FileReadTool()
         result = tool.execute(path=str(f))
         assert result.success is True
+
+
+    def test_blocks_symlink_alias_to_sensitive_file(self, tmp_path):
+        secret = tmp_path / ".env"
+        secret.write_text("SECRET=sentinel", encoding="utf-8")
+        alias = tmp_path / "notes.txt"
+        alias.symlink_to(secret)
+        result = FileReadTool().execute(path=str(alias))
+        assert result.success is False
+        assert "sensitive" in result.content.lower()
