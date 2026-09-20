@@ -102,9 +102,11 @@ class FileWriteTool(BaseTool):
         path = Path(file_path)
 
         # Block sensitive files (secrets, credentials, keys)
-        from openjarvis.security.file_policy import is_sensitive_file
+        from openjarvis.security.file_policy import resolve_and_check_sensitive_path
 
-        if is_sensitive_file(path):
+        try:
+            path = resolve_and_check_sensitive_path(path)
+        except (PermissionError, OSError):
             return ToolResult(
                 tool_name="file_write",
                 content=f"Access denied: {file_path} is a sensitive file.",

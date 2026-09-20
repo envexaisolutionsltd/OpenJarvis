@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
+from urllib.parse import urljoin
 
 from openjarvis import __version__
 from openjarvis.core.registry import ToolRegistry
@@ -182,14 +183,30 @@ class WebSearchTool(BaseTool):
         ssrf_error = check_ssrf(url)
         if ssrf_error:
             raise ValueError(ssrf_error)
-        resp = httpx.get(
-            url.strip(),
-            follow_redirects=True,
-            timeout=30.0,
-            headers={
-                "User-Agent": "Mozilla/5.0 (compatible; OpenJarvis/1.0; +https://github.com/openjarvis)"
-            },
-        )
+        current_url = url.strip()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; OpenJarvis/1.0; +https://github.com/openjarvis)"
+        }
+        # Never let HTTPX follow redirects on our behalf. Every hop is
+        # untrusted input and must pass the SSRF policy before connecting.
+        for _redirect in range(6):
+            ssrf_error = check_ssrf(current_url)
+            if ssrf_error:
+                raise ValueError(ssrf_error)
+            resp = httpx.get(
+                current_url,
+                follow_redirects=False,
+                timeout=30.0,
+                headers=headers,
+            )
+            if resp.status_code not in (301, 302, 303, 307, 308):
+                break
+            location = resp.headers.get("location")
+            if not location:
+                break
+            if _redirect == 5:
+                raise ValueError("Too many redirects")
+            current_url = urljoin(str(resp.url), location)
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
         if "application/pdf" in content_type:

@@ -55,6 +55,35 @@ def _is_sensitive_file_py(path_str: str) -> bool:
     return False
 
 
+def resolve_and_check_sensitive_path(path: Union[str, Path]) -> Path:
+    """Return a canonical path, rejecting sensitive aliases and targets.
+
+    Existing symlinks are resolved before the final sensitivity decision. For
+    a new file, the nearest existing parent is canonicalized so a symlinked
+    parent directory cannot redirect a write into a protected location.
+    """
+    supplied = Path(path).expanduser()
+    if is_sensitive_file(supplied):
+        raise PermissionError(f"{supplied} is a sensitive file")
+
+    if supplied.exists() or supplied.is_symlink():
+        resolved = supplied.resolve(strict=True)
+    else:
+        parent = supplied.parent
+        missing: list[str] = []
+        while not parent.exists():
+            missing.append(parent.name)
+            parent = parent.parent
+        resolved_parent = parent.resolve(strict=True)
+        for part in reversed(missing):
+            resolved_parent = resolved_parent / part
+        resolved = resolved_parent / supplied.name
+
+    if is_sensitive_file(resolved):
+        raise PermissionError(f"{resolved} is a sensitive file")
+    return resolved
+
+
 def filter_sensitive_paths(paths: Iterable[Union[str, Path]]) -> List[Path]:
     """Return only non-sensitive paths from *paths*."""
     return [Path(p) for p in paths if not is_sensitive_file(p)]
@@ -64,4 +93,5 @@ __all__ = [
     "DEFAULT_SENSITIVE_PATTERNS",
     "filter_sensitive_paths",
     "is_sensitive_file",
+    "resolve_and_check_sensitive_path",
 ]
