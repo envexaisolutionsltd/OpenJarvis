@@ -1,0 +1,25 @@
+services:
+  arden-runtime:
+    build: .
+    restart: unless-stopped
+    environment:
+      ARDEN_RUNTIME_TOKEN: ${ARDEN_RUNTIME_TOKEN:?set ARDEN_RUNTIME_TOKEN}
+      ARDEN_RUNTIME_DB: /data/arden-runtime.db
+      ARDEN_OLLAMA_URL: http://ollama:11434
+      ARDEN_MODEL: ${ARDEN_MODEL:-qwen3:4b}
+      ARDEN_FREE_ONLY: "true"
+    volumes:
+      - arden-data:/data
+    depends_on:
+      ollama:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8000:8000"
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+volumes:
+  arden-data:
+  ollama-data:
